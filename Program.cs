@@ -88,7 +88,7 @@ namespace Resonite_DataTree_Converter
         {
             OpenFileDialog ofd = new OpenFileDialog()
             {
-                Filter = "Resonite DataTree File (*.brson;*.lz4bson;*.7zbson)|*.brson;*.lz4bson;*.7zbson",
+                Filter = "Resonite DataTree File (*.frdt;*.brson;*.lz4bson;*.7zbson)|*.frdt;*.brson;*.lz4bson;*.7zbson",
                 Title = "Choose a DataTree file for conversion",
                 CheckFileExists = true,
                 CheckPathExists = true,
@@ -124,13 +124,10 @@ namespace Resonite_DataTree_Converter
             StreamWriter fileStream = File.CreateText(save.FileName);
 
             libraries.TryGetValue("Newtonsoft.Json", out Assembly NewtonsoftJson);
-            Console.WriteLine(NewtonsoftJson.GetTypes());
-            ConstructorInfo aaaaaa = NewtonsoftJson.GetType("Newtonsoft.Json.JsonTextWriter").GetConstructor(new Type[] {typeof(TextWriter)});
-            object testy = aaaaaa.Invoke(new object[] { fileStream });
-            //object testy = NewtonsoftJson.GetType("JsonTextWriter").GetConstructor(new Type[] { NewtonsoftJson.GetType("Newtonsoft.Json.JsonTextWriter") }).Invoke(null, new object[] { fileStream });
-            //JsonTextWriter test = new JsonTextWriter(fileStream);
+            ConstructorInfo jsonTextWriterConstructor = NewtonsoftJson.GetType("Newtonsoft.Json.JsonTextWriter").GetConstructor(new Type[] {typeof(TextWriter)});
+            object jsonTextWriter = jsonTextWriterConstructor.Invoke(new object[] { fileStream });
             var writemethod = dataTreeConverter.GetMethod("Write", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            writemethod.Invoke(null, new object[] { convert, testy });
+            writemethod.Invoke(null, new object[] { convert, jsonTextWriter });
 
             fileStream.Dispose();
             fileStream.Close();
