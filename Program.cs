@@ -3,6 +3,7 @@ using System.Reflection;
 using System.IO;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Linq;
 
 
 namespace Resonite_DataTree_Converter
@@ -43,16 +44,45 @@ namespace Resonite_DataTree_Converter
             string resoniteLocation = sr.ReadToEnd();
             sr.Close();
             Console.WriteLine(string.Format("DIRECTORY: {0}", Path.GetDirectoryName(resoniteLocation)));
-            string LibraryFolder = Path.Combine(Path.GetDirectoryName(resoniteLocation), "Resonite_Data", "Managed");
+            
+            // Try the new location first (same directory as exe), then fall back to old location
+            string resoniteDir = Path.GetDirectoryName(resoniteLocation);
+            string LibraryFolder = resoniteDir;
+            string oldLibraryFolder = Path.Combine(resoniteDir, "Resonite_Data", "Managed");
+            
             Dictionary<string, Assembly> libraries = new Dictionary<string, Assembly>();
             try
             {
-                libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")));
-                libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Elements.Core.dll")));
+                // Try new location first (post-August update)
+                if (File.Exists(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")) && 
+                    File.Exists(Path.Combine(LibraryFolder, "Elements.Core.dll")))
+                {
+                    Console.WriteLine("Found DLLs in new location (same directory as exe)");
+                    libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")));
+                    libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Elements.Core.dll")));
+                }
+                // Fall back to old location
+                else if (File.Exists(Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")) && 
+                         File.Exists(Path.Combine(oldLibraryFolder, "Elements.Core.dll")))
+                {
+                    Console.WriteLine("Found DLLs in old location (Resonite_Data/Managed)");
+                    libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")));
+                    libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(oldLibraryFolder, "Elements.Core.dll")));
+                }
+                else
+                {
+                    throw new FileNotFoundException("Required DLL files not found in either location");
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                Console.WriteLine("Resonite.exe not detected. Restarting...");
+                Console.WriteLine($"Failed to load Resonite libraries: {ex.Message}");
+                Console.WriteLine("Looking for:");
+                Console.WriteLine($"  - {Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")}");
+                Console.WriteLine($"  - {Path.Combine(LibraryFolder, "Elements.Core.dll")}");
+                Console.WriteLine("Or in old location:");
+                Console.WriteLine($"  - {Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")}");
+                Console.WriteLine($"  - {Path.Combine(oldLibraryFolder, "Elements.Core.dll")}");
                 Console.WriteLine("");
                 File.Delete(settingsLocation);
                 goto start_find;
@@ -102,8 +132,72 @@ namespace Resonite_DataTree_Converter
                 return false;
             }
             libraries.TryGetValue("Elements.Core", out Assembly ElementsCore);
+            if (ElementsCore == null)
+            {
+                Console.WriteLine("ERROR: Elements.Core assembly not loaded properly");
+                return false;
+            }
+            
+            // List all types in Elements.Core to help debug
+            Console.WriteLine("Searching for DataTreeConverter in Elements.Core...");
             var dataTreeConverter = ElementsCore.GetType("Elements.Core.DataTreeConverter");
+            
+            if (dataTreeConverter == null)
+            {
+                Console.WriteLine("ERROR: DataTreeConverter not found in Elements.Core");
+                Console.WriteLine("Attempting to list available types...");
+                try
+                {
+                    Type[] types = null;
+                    try
+                    {
+                        types = ElementsCore.GetTypes();
+                    }
+                    catch (ReflectionTypeLoadException ex)
+                    {
+                        // Some types may not load, but we can still get the ones that did
+                        types = ex.Types.Where(t => t != null).ToArray();
+                        Console.WriteLine($"Warning: Some types could not be loaded due to missing dependencies");
+                    }
+                    
+                    if (types != null && types.Length > 0)
+                    {
+                        Console.WriteLine("Available types containing 'DataTree' or 'Converter':");
+                        foreach (var type in types)
+                        {
+                            if (type != null && type.FullName != null && 
+                                (type.FullName.Contains("DataTree") || type.FullName.Contains("Converter")))
+                            {
+                                Console.WriteLine($"  - {type.FullName}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not enumerate types: {ex.Message}");
+                    Console.WriteLine("\nThis might be due to .NET version mismatch.");
+                    Console.WriteLine("Resonite may be using .NET 9.0 while this converter uses .NET 8.0");
+                }
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey();
+                return false;
+            }
+            
             var dataTreeLoad = dataTreeConverter.GetMethod("Load", new Type[] { typeof(string), typeof(string) });
+            if (dataTreeLoad == null)
+            {
+                Console.WriteLine("ERROR: Load method not found in DataTreeConverter");
+                Console.WriteLine("Available methods:");
+                foreach (var method in dataTreeConverter.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                {
+                    Console.WriteLine($"  - {method.Name}");
+                }
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey();
+                return false;
+            }
+            
             object convert = dataTreeLoad.Invoke(null, new object[] { ofd.FileName, null });
             //DataTreeDictionary convert = DataTreeConverter.Load(ofd.FileName);
 
