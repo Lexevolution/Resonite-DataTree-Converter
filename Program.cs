@@ -3,6 +3,7 @@ using System.Reflection;
 using System.IO;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Linq;
 
 
 namespace Resonite_DataTree_Converter
@@ -144,13 +145,39 @@ namespace Resonite_DataTree_Converter
             if (dataTreeConverter == null)
             {
                 Console.WriteLine("ERROR: DataTreeConverter not found in Elements.Core");
-                Console.WriteLine("Available types containing 'DataTree' or 'Converter':");
-                foreach (var type in ElementsCore.GetTypes())
+                Console.WriteLine("Attempting to list available types...");
+                try
                 {
-                    if (type.FullName.Contains("DataTree") || type.FullName.Contains("Converter"))
+                    Type[] types = null;
+                    try
                     {
-                        Console.WriteLine($"  - {type.FullName}");
+                        types = ElementsCore.GetTypes();
                     }
+                    catch (ReflectionTypeLoadException ex)
+                    {
+                        // Some types may not load, but we can still get the ones that did
+                        types = ex.Types.Where(t => t != null).ToArray();
+                        Console.WriteLine($"Warning: Some types could not be loaded due to missing dependencies");
+                    }
+                    
+                    if (types != null && types.Length > 0)
+                    {
+                        Console.WriteLine("Available types containing 'DataTree' or 'Converter':");
+                        foreach (var type in types)
+                        {
+                            if (type != null && type.FullName != null && 
+                                (type.FullName.Contains("DataTree") || type.FullName.Contains("Converter")))
+                            {
+                                Console.WriteLine($"  - {type.FullName}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not enumerate types: {ex.Message}");
+                    Console.WriteLine("\nThis might be due to .NET version mismatch.");
+                    Console.WriteLine("Resonite may be using .NET 9.0 while this converter uses .NET 8.0");
                 }
                 Console.WriteLine("\nPress any key to continue...");
                 Console.ReadKey();
