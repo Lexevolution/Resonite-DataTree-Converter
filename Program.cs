@@ -43,16 +43,45 @@ namespace Resonite_DataTree_Converter
             string resoniteLocation = sr.ReadToEnd();
             sr.Close();
             Console.WriteLine(string.Format("DIRECTORY: {0}", Path.GetDirectoryName(resoniteLocation)));
-            string LibraryFolder = Path.Combine(Path.GetDirectoryName(resoniteLocation), "Resonite_Data", "Managed");
+            
+            // Try the new location first (same directory as exe), then fall back to old location
+            string resoniteDir = Path.GetDirectoryName(resoniteLocation);
+            string LibraryFolder = resoniteDir;
+            string oldLibraryFolder = Path.Combine(resoniteDir, "Resonite_Data", "Managed");
+            
             Dictionary<string, Assembly> libraries = new Dictionary<string, Assembly>();
             try
             {
-                libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")));
-                libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Elements.Core.dll")));
+                // Try new location first (post-August update)
+                if (File.Exists(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")) && 
+                    File.Exists(Path.Combine(LibraryFolder, "Elements.Core.dll")))
+                {
+                    Console.WriteLine("Found DLLs in new location (same directory as exe)");
+                    libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")));
+                    libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(LibraryFolder, "Elements.Core.dll")));
+                }
+                // Fall back to old location
+                else if (File.Exists(Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")) && 
+                         File.Exists(Path.Combine(oldLibraryFolder, "Elements.Core.dll")))
+                {
+                    Console.WriteLine("Found DLLs in old location (Resonite_Data/Managed)");
+                    libraries.Add("Newtonsoft.Json", Assembly.LoadFrom(Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")));
+                    libraries.Add("Elements.Core", Assembly.LoadFrom(Path.Combine(oldLibraryFolder, "Elements.Core.dll")));
+                }
+                else
+                {
+                    throw new FileNotFoundException("Required DLL files not found in either location");
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                Console.WriteLine("Resonite.exe not detected. Restarting...");
+                Console.WriteLine($"Failed to load Resonite libraries: {ex.Message}");
+                Console.WriteLine("Looking for:");
+                Console.WriteLine($"  - {Path.Combine(LibraryFolder, "Newtonsoft.Json.dll")}");
+                Console.WriteLine($"  - {Path.Combine(LibraryFolder, "Elements.Core.dll")}");
+                Console.WriteLine("Or in old location:");
+                Console.WriteLine($"  - {Path.Combine(oldLibraryFolder, "Newtonsoft.Json.dll")}");
+                Console.WriteLine($"  - {Path.Combine(oldLibraryFolder, "Elements.Core.dll")}");
                 Console.WriteLine("");
                 File.Delete(settingsLocation);
                 goto start_find;
