@@ -131,8 +131,46 @@ namespace Resonite_DataTree_Converter
                 return false;
             }
             libraries.TryGetValue("Elements.Core", out Assembly ElementsCore);
+            if (ElementsCore == null)
+            {
+                Console.WriteLine("ERROR: Elements.Core assembly not loaded properly");
+                return false;
+            }
+            
+            // List all types in Elements.Core to help debug
+            Console.WriteLine("Searching for DataTreeConverter in Elements.Core...");
             var dataTreeConverter = ElementsCore.GetType("Elements.Core.DataTreeConverter");
+            
+            if (dataTreeConverter == null)
+            {
+                Console.WriteLine("ERROR: DataTreeConverter not found in Elements.Core");
+                Console.WriteLine("Available types containing 'DataTree' or 'Converter':");
+                foreach (var type in ElementsCore.GetTypes())
+                {
+                    if (type.FullName.Contains("DataTree") || type.FullName.Contains("Converter"))
+                    {
+                        Console.WriteLine($"  - {type.FullName}");
+                    }
+                }
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey();
+                return false;
+            }
+            
             var dataTreeLoad = dataTreeConverter.GetMethod("Load", new Type[] { typeof(string), typeof(string) });
+            if (dataTreeLoad == null)
+            {
+                Console.WriteLine("ERROR: Load method not found in DataTreeConverter");
+                Console.WriteLine("Available methods:");
+                foreach (var method in dataTreeConverter.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                {
+                    Console.WriteLine($"  - {method.Name}");
+                }
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey();
+                return false;
+            }
+            
             object convert = dataTreeLoad.Invoke(null, new object[] { ofd.FileName, null });
             //DataTreeDictionary convert = DataTreeConverter.Load(ofd.FileName);
 
